@@ -122,7 +122,14 @@ actor ClaudeLogUsageScanner {
 
         var files = Self.usageFiles(under: roots)
         if organizationID != nil || claimsDefaultHome {
-            files = ownedUsageFiles(files, claimsDefaultHome: claimsDefaultHome)
+            let ownershipStart = ContinuousClock.now
+            files = ownedUsageFiles(files, since: since, claimsDefaultHome: claimsDefaultHome)
+            let ownershipTime = ContinuousClock.now - ownershipStart
+            if Task.isCancelled {
+                AppLog.info(LogTag.plugin("claude"), "local usage log ownership check interrupted after \(ownershipTime)")
+            } else if ownershipTime > .seconds(10) {
+                AppLog.info(LogTag.plugin("claude"), "checked local usage log ownership in \(ownershipTime)")
+            }
         }
         guard !Task.isCancelled else { return nil }
         guard !files.isEmpty else {
@@ -282,8 +289,11 @@ actor ClaudeLogUsageScanner {
     /// Cowork roots carry their organization in the directory layout. Other sessions identify theirs
     /// in a bridge event or Desktop's account-and-organization-scoped session index; subagent files
     /// inherit their parent session's ownership. Keep this outside the shared parsed-entry cache.
+    /// Files last written before `since` are dropped unread: the parse skips them anyway, and reading
+    /// every old session's ownership made a cold scan of a long history outlast its time budget.
     private func ownedUsageFiles(
         _ files: [JSONLScanning.DiscoveredFile],
+        since: Date,
         claimsDefaultHome: Bool
     ) -> [JSONLScanning.DiscoveredFile] {
         let coworkPrefix = homeDirectory()
@@ -301,7 +311,7 @@ actor ClaudeLogUsageScanner {
         // Optional values retain read failures for this pass without persisting them.
         var identities: [String: ClaudeSessionIdentity?] = [:]
 
-        for file in files {
+        for file in files where file.mtime >= since {
             guard !Task.isCancelled else { return [] }
             guard seenPaths.insert(file.path).inserted else { continue }
             let canonicalPath = URL(fileURLWithPath: file.path).resolvingSymlinksInPath().path

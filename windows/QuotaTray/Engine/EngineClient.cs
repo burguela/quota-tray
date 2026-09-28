@@ -153,7 +153,15 @@ public sealed class EngineClient
             }
             catch (OperationCanceledException)
             {
-                try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception or AggregateException)
+                {
+                    // Already exiting, or part of the tree couldn't be ended; still report the timeout.
+                    AppLog.Warn($"could not end the timed-out engine: {error.Message}");
+                }
                 throw new EngineException($"Quota Tray's engine did not finish within {Timeout.TotalSeconds:0} seconds.");
             }
 

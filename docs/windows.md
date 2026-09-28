@@ -110,10 +110,10 @@ Each provider reads what its own CLI or desktop app already stored, exactly as o
 
 | Provider | Looks in |
 | --- | --- |
-| Claude | `%USERPROFILE%\.claude\.credentials.json`; Claude Desktop in `%APPDATA%\Claude` (decrypted with the Windows account's DPAPI key) |
+| Claude | `%USERPROFILE%\.claude\.credentials.json`; Claude Desktop in `%APPDATA%\Claude`, or in `%LOCALAPPDATA%\Packages\Claude_…\LocalCache\Roaming\Claude` for the Microsoft Store version (decrypted with the Windows account's DPAPI key) |
 | Codex | `%USERPROFILE%\.codex\auth.json` (or `CODEX_HOME`) |
 | Cursor | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` |
-| Devin | `%APPDATA%\Devin\User\globalStorage\state.vscdb` |
+| Devin | `%APPDATA%\devin\credentials.toml` (Devin CLI), then `%APPDATA%\Devin\User\globalStorage\state.vscdb` |
 | Copilot | `%LOCALAPPDATA%\github-copilot\apps.json`, then `%APPDATA%\GitHub CLI\hosts.yml`, then Windows Credential Manager (`gh:github.com`) |
 | Antigravity | the running Antigravity language server, found with PowerShell |
 | Others | the same files and environment variables their provider pages list, under `%USERPROFILE%` |

@@ -73,6 +73,14 @@ struct LanguageServerDiscovery: Sendable {
 
     // MARK: - Process and socket listing
 
+    #if os(Windows)
+    /// Windows PowerShell writes piped output in the console's OEM code page (850 on a Portuguese
+    /// system), not UTF-8, so a command line with an accent (a `C:\Users\João` path, an open
+    /// `relatório.docx`) used to make the whole listing undecodable and nothing was found. Ask for
+    /// UTF-8; without a console to set it on, `SystemProcessRunner` still decodes the rest.
+    static let powerShellUTF8Output = "try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}; "
+    #endif
+
     /// `pid command` lines for every process. macOS/Linux: `ps`. Windows: PowerShell over
     /// `Win32_Process`, printed in the same `pid command` shape so the parser stays shared.
     private func listProcesses() throws -> ProcessResult {
@@ -81,7 +89,8 @@ struct LanguageServerDiscovery: Sendable {
             executable: "powershell",
             arguments: [
                 "-NoProfile", "-NonInteractive", "-Command",
-                "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }"
+                Self.powerShellUTF8Output
+                    + "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }"
             ],
             environment: [:],
             timeout: 10
@@ -104,7 +113,8 @@ struct LanguageServerDiscovery: Sendable {
             executable: "powershell",
             arguments: [
                 "-NoProfile", "-NonInteractive", "-Command",
-                "Get-NetTCPConnection -State Listen -OwningProcess \(pid) -ErrorAction SilentlyContinue | "
+                Self.powerShellUTF8Output
+                    + "Get-NetTCPConnection -State Listen -OwningProcess \(pid) -ErrorAction SilentlyContinue | "
                     + "ForEach-Object { \"TCP $($_.LocalAddress):$($_.LocalPort) (LISTEN)\" }"
             ],
             environment: [:],

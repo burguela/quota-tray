@@ -59,7 +59,7 @@ struct CodexSwapAccount: Equatable, Sendable {
         let root: String
         if let override = environment.value(for: "XSWAP_HOME")?.nilIfEmpty {
             root = override.hasPrefix("~/") ? home.path + String(override.dropFirst()) : override
-        } else if let xdg = environment.value(for: "XDG_DATA_HOME"), xdg.hasPrefix("/") {
+        } else if let xdg = environment.value(for: "XDG_DATA_HOME"), Platform.isAbsolutePath(xdg) {
             root = xdg.trimmingTrailingSlashes + "/codex-swap"
         } else {
             root = home.appendingPathComponent(".local/share/codex-swap").path
@@ -95,7 +95,7 @@ struct CodexSwapAccount: Equatable, Sendable {
     }
 
     private static func validPath(_ path: String) -> Bool {
-        path.hasPrefix("/") && !path.contains("\0")
+        Platform.isAbsolutePath(path) && !path.contains("\0")
     }
 
     private struct Registry: Decodable {

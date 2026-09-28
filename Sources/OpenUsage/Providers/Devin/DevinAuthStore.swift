@@ -17,7 +17,12 @@ enum DevinAuthError: Error, LocalizedError, Equatable {
 }
 
 struct DevinAuthStore: Sendable {
+    #if os(Windows)
+    /// The Devin CLI keeps its login in `%APPDATA%\devin` on Windows (https://docs.devin.ai/cli/enterprise/devin-auth).
+    static let credentialsPath = "~/\(Platform.desktopAppDataRelativePath("devin"))/credentials.toml"
+    #else
     static let credentialsPath = "~/.local/share/devin/credentials.toml"
+    #endif
     static let stateDBPath = "~/\(Platform.desktopAppDataRelativePath("Devin"))/User/globalStorage/state.vscdb"
     static let defaultAPIServerURL = "https://server.codeium.com"
 

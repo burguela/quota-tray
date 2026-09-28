@@ -92,6 +92,44 @@ final class ClaudeSessionIdentityTests: XCTestCase {
         XCTAssertEqual(result?.series.daily.first?.totalTokens, 15)
     }
 
+    func testOwnershipOfSessionsOutsideTheWindowIsNotRead() async throws {
+        let now = Date()
+        let home = try ClaudeLogFixture.makeUserHome(claudeFiles: [
+            "workspace/old.jsonl": #"{"ownerOrganizationUuid":"org-a"}"#,
+            "workspace/recent.jsonl": #"{"ownerOrganizationUuid":"org-a"}"# + "\n" + ClaudeLogFixture.usageLine(
+                timestamp: OpenUsageISO8601.string(from: now), input: 10, output: 5, costUSD: 0.25
+            )
+        ])
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.setAttributes(
+            [.modificationDate: now.addingTimeInterval(-60 * 86_400)],
+            ofItemAtPath: home.appendingPathComponent(".claude/projects/workspace/old.jsonl").path
+        )
+        let readPaths = Mutex<[String]>([])
+        let scanner = ClaudeLogUsageScanner(
+            environment: FakeEnvironment([:]), homeDirectory: { home },
+            incrementalScanner: IncrementalJSONLScanner<ClaudeLogUsageScanner.Entry>(),
+            organizationUUID: "org-a",
+            readOwnershipData: { url in
+                readPaths.withLock { $0.append(url.lastPathComponent) }
+                return try Data(contentsOf: url)
+            }
+        )
+        let result = await scanner.scan(now: now, pricing: pricing)
+        XCTAssertEqual(result?.series.daily.first?.totalTokens, 15)
+        XCTAssertEqual(readPaths.withLock { $0 }, ["recent.jsonl"])
+    }
+
+    func testOwnerFoundAmongManyRecordsWithoutMarkers() {
+        let filler = String(repeating: #"{"type":"assistant","message":{"usage":{}}}"# + "\n", count: 50_000)
+        let owner = #"{"ownerOrganizationUuid":"ORG-A"}"#
+        XCTAssertEqual(ClaudeSessionIdentity.parse(Data((filler + owner + "\n" + filler).utf8)),
+                       .owned(organizationID: "org-a", accountID: nil))
+        let unparsable = #"{"ownerOrganizationUuid": broken"# + "\n"
+        XCTAssertEqual(ClaudeSessionIdentity.parse(Data((unparsable + owner).utf8)),
+                       .owned(organizationID: "org-a", accountID: nil))
+    }
+
     func testReadFailureIsRetriedOnlyOnNextPass() async throws {
         let home = try ClaudeLogFixture.makeUserHome(claudeFiles: [
             "workspace/session.jsonl": "{}",

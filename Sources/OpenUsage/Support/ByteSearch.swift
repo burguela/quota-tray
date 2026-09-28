@@ -14,18 +14,23 @@ enum ByteSearch {
 
     /// Whether `needle` occurs anywhere in `haystack`.
     static func contains(_ needle: [UInt8], in haystack: UnsafeRawBufferPointer) -> Bool {
-        guard let first = needle.first else { return true }
-        guard haystack.count >= needle.count, let base = haystack.baseAddress else { return false }
+        firstIndex(of: needle, in: haystack) != nil
+    }
+
+    /// Offset of the first occurrence of `needle` in `haystack`, or `nil` when there is none.
+    static func firstIndex(of needle: [UInt8], in haystack: UnsafeRawBufferPointer) -> Int? {
+        guard let first = needle.first else { return 0 }
+        guard haystack.count >= needle.count, let base = haystack.baseAddress else { return nil }
         let lastStart = haystack.count - needle.count
         var offset = 0
         while offset <= lastStart {
-            guard let hit = memchr(base + offset, Int32(first), lastStart - offset + 1) else { return false }
+            guard let hit = memchr(base + offset, Int32(first), lastStart - offset + 1) else { return nil }
             let position = base.distance(to: UnsafeRawPointer(hit))
             if needle.withUnsafeBytes({ memcmp(base + position, $0.baseAddress!, needle.count) }) == 0 {
-                return true
+                return position
             }
             offset = position + 1
         }
-        return false
+        return nil
     }
 }

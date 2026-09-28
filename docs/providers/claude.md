@@ -113,7 +113,7 @@ also count on the current account's card.
 Subagent logs inherit their parent session's ownership, even when that parent is older than the
 spend window. Sessions with conflicting account or organization records are excluded. OpenUsage
 checks each parent once per refresh and reuses unchanged ownership results, including conflicts,
-across refreshes. Failed reads are retried on the next refresh, and large ownership scans stop
+across refreshes. Sessions last written before the spend window are not checked at all. Failed reads are retried on the next refresh, and large ownership scans stop
 when the refresh is cancelled.
 
 Claude subagents, including agents nested inside workflows, inherit their parent session's account.

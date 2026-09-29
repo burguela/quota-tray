@@ -202,7 +202,15 @@ private final class SubprocessOutput: @unchecked Sendable {
     func setStdout(_ data: Data) { lock.lock(); stdout = data; lock.unlock() }
     func setStderr(_ data: Data) { lock.lock(); stderr = data; lock.unlock() }
 
-    var stdoutString: String { lock.lock(); defer { lock.unlock() }; return String(data: stdout, encoding: .utf8) ?? "" }
-    var stderrString: String { lock.lock(); defer { lock.unlock() }; return String(data: stderr, encoding: .utf8) ?? "" }
+    var stdoutString: String { lock.lock(); defer { lock.unlock() }; return Self.decode(stdout) }
+    var stderrString: String { lock.lock(); defer { lock.unlock() }; return Self.decode(stderr) }
+
+    #if os(Windows)
+    /// Windows tools may print in the console's legacy code page (`powershell` in 850 on a Portuguese
+    /// system). One accented byte must not blank the whole output, so invalid bytes become U+FFFD.
+    static func decode(_ data: Data) -> String { String(decoding: data, as: UTF8.self) }
+    #else
+    static func decode(_ data: Data) -> String { String(data: data, encoding: .utf8) ?? "" }
+    #endif
 }
 

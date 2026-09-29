@@ -153,6 +153,12 @@ public sealed class TrayController : IPopupActions, IDisposable
             AppLog.Error($"dashboard ({mode}) failed: {error}");
             Apply(null, error.Message);
         }
+        catch (Exception error)
+        {
+            // Callers discard this task, so anything unexpected must be logged and shown here.
+            AppLog.Error($"dashboard ({mode}) failed unexpectedly: {error}");
+            Apply(null, $"Quota Tray couldn't refresh: {error.Message}");
+        }
         finally
         {
             if (mode != RefreshMode.Cached)
@@ -173,6 +179,11 @@ public sealed class TrayController : IPopupActions, IDisposable
         {
             AppLog.Error($"{description} failed: {error}");
             Apply(null, error.Message);
+        }
+        catch (Exception error)
+        {
+            AppLog.Error($"{description} failed unexpectedly: {error}");
+            Apply(null, $"Quota Tray couldn't apply that change: {error.Message}");
         }
     }
 

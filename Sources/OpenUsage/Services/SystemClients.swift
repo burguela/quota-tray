@@ -327,6 +327,12 @@ enum KeychainError: Error, LocalizedError {
 }
 
 func expandHome(_ path: String) -> String {
+    #if os(Windows)
+    // `~\.codex` is how a Windows user writes the same thing.
+    if path.hasPrefix("~\\") {
+        return FileManager.default.homeDirectoryForCurrentUser.path + "/" + String(path.dropFirst(2))
+    }
+    #endif
     guard path == "~" || path.hasPrefix("~/") else { return path }
     let home = FileManager.default.homeDirectoryForCurrentUser.path
     if path == "~" { return home }

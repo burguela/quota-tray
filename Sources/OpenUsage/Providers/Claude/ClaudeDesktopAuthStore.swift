@@ -87,7 +87,29 @@ enum ClaudeDesktopCredentialError: Error, Sendable {
 /// valid access token and waits for Desktop to renew it.
 struct ClaudeDesktopAuthStore: Sendable {
     /// Electron's `userData` folder for Claude Desktop, relative to the home directory.
+    #if os(Windows)
+    static let userDataRelativePath = windowsUserDataRelativePath(home: FileManager.default.homeDirectoryForCurrentUser)
+    #else
     static let userDataRelativePath = Platform.desktopAppDataRelativePath("Claude")
+    #endif
+
+    /// The Microsoft Store / MSIX build of Claude Desktop runs with a virtualized `%APPDATA%`: its
+    /// data lands in `%LOCALAPPDATA%\Packages\Claude_<publisher>\LocalCache\Roaming\Claude`, not
+    /// `%APPDATA%\Claude`. Use that copy when it exists, else the classic installer's folder.
+    static func windowsUserDataRelativePath(home: URL) -> String {
+        let packages = home.appendingPathComponent("AppData/Local/Packages", isDirectory: true)
+        let packaged = ((try? FileManager.default.contentsOfDirectory(atPath: packages.path)) ?? [])
+            .filter { $0.hasPrefix("Claude_") }
+            .sorted()
+            .map { "AppData/Local/Packages/\($0)/LocalCache/Roaming/Claude" }
+            .first { relative in
+                var isDirectory: ObjCBool = false
+                return FileManager.default.fileExists(
+                    atPath: home.appendingPathComponent(relative).path, isDirectory: &isDirectory
+                ) && isDirectory.boolValue
+            }
+        return packaged ?? "AppData/Roaming/Claude"
+    }
     private static let configRelativePath = "\(userDataRelativePath)/config.json"
     private static let cookieRelativePaths = [
         "\(userDataRelativePath)/Cookies",

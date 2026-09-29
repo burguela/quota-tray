@@ -71,11 +71,15 @@ Type: filesandordirs; Name: "{app}"
 
 [Code]
 // The tray app has no window to close politely, and it only holds caches it can rebuild, so end it.
+// /T also ends a refresh in progress (the engine and its sqlite3 or PowerShell helpers), which would
+// otherwise keep quotatray-engine.exe locked and fail the file replace; the second call ends an engine
+// left running by a tray app that crashed.
 procedure StopRunningApp();
 var
   ResultCode: Integer;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM QuotaTray.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM QuotaTray.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM quotatray-engine.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;

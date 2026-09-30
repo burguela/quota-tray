@@ -1,6 +1,9 @@
 using System;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using QuotaTray.Services;
 
 namespace QuotaTray.Views;
@@ -56,13 +59,14 @@ public partial class PopupWindow
                 }
                 label.Children.Add(Text(provider.DisplayName, theme.TextPrimary, 13, verticalAlignment: VerticalAlignment.Center));
                 providers.Children.Add(SettingsRow(label, new ToggleSwitch(provider.Enabled,
-                    enabled => _actions.SetProviderEnabled(id, enabled)), theme));
+                    enabled => _actions.SetProviderEnabled(id, enabled)), theme, provider.DisplayName));
             }
         }
 
         var advanced = Section("Advanced", theme, body);
         advanced.Children.Add(SettingsRow("Log Files",
-            SmallButton(Text("Open Folder", theme.TextPrimary, SupportingSize, FontWeights.Medium), theme, _actions.OpenLogFolder), theme));
+            SmallButton(Text("Open Folder", theme.TextPrimary, SupportingSize, FontWeights.Medium), theme, _actions.OpenLogFolder,
+                "Open Log Folder"), theme));
 
         // Credit where it's due: Quota Tray is an unofficial fork of OpenUsage (MIT).
         var about = Section("About", theme, body, last: true);
@@ -71,7 +75,7 @@ public partial class PopupWindow
         credit.Children.Add(Text("By Robin Ebers and contributors", theme.TextSecondary, 11, wrap: true));
         about.Children.Add(SettingsRow(credit,
             SmallButton(Text("View Original", theme.TextPrimary, SupportingSize, FontWeights.Medium), theme,
-                () => OpenUrl(OriginalProjectUrl)), theme));
+                () => OpenUrl(OriginalProjectUrl), "View Original OpenUsage Project"), theme, "Based on OpenUsage"));
     }
 
     private const string OriginalProjectUrl = "https://github.com/robinebers/openusage";
@@ -90,27 +94,49 @@ public partial class PopupWindow
     }
 
     private static UIElement SettingsRow(string label, FrameworkElement control, Theme theme) =>
-        SettingsRow(Text(label, theme.TextPrimary, 13, verticalAlignment: VerticalAlignment.Center), control, theme);
+        SettingsRow(Text(label, theme.TextPrimary, 13, verticalAlignment: VerticalAlignment.Center), control, theme, label);
 
-    private static UIElement SettingsRow(FrameworkElement label, FrameworkElement control, Theme theme)
+    /// <summary>
+    /// A label with its control on the right. <paramref name="name"/> is what a screen reader announces
+    /// for the control. A switch's whole row is its click target, as in Windows Settings.
+    /// </summary>
+    private static UIElement SettingsRow(FrameworkElement label, FrameworkElement control, Theme theme, string name)
     {
         _ = theme;
         var row = new DockPanel { Margin = new Thickness(12, 9, 12, 9), MinHeight = 20 };
         control.VerticalAlignment = VerticalAlignment.Center;
         control.Margin = new Thickness(10, 0, 0, 0);
+        if (string.IsNullOrEmpty(AutomationProperties.GetName(control)))
+        {
+            AutomationProperties.SetName(control, name);
+        }
         DockPanel.SetDock(control, Dock.Right);
         row.Children.Add(control);
         row.Children.Add(label);
+        if (control is ToggleSwitch toggle)
+        {
+            // Hit testing needs a fill; the switch handles its own clicks first.
+            row.Background = Brushes.Transparent;
+            row.Cursor = Cursors.Hand;
+            row.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                toggle.Flip();
+            };
+        }
         return row;
     }
 
     /// <summary>A trailing pop-up picker that hugs its selection (the Mac's menu-style Picker).</summary>
-    private static Border PickerButton(string selection, Theme theme, Action onClick)
+    private static Pressable PickerButton(string selection, Theme theme, Action onClick)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(Text(selection, theme.TextPrimary, SupportingSize, verticalAlignment: VerticalAlignment.Center));
         content.Children.Add(Glyph(Glyphs.ChevronUpDown, theme.TextSecondary, 9, stroke: 1.4, margin: new Thickness(6, 0, 0, 0)));
-        return SmallButton(content, theme, onClick);
+        var button = SmallButton(content, theme, onClick);
+        // The row names the picker; screen readers read the current choice from here.
+        AutomationProperties.SetItemStatus(button, selection);
+        return button;
     }
 
     private static bool SafeLaunchAtLogin()

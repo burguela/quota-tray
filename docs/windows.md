@@ -15,7 +15,8 @@ The panel follows the Mac popover's layout and colors, in Windows' light or dark
 
 - **Click the taskbar strip or the tray icon** to open the panel. It always opens in the same spot, right
   above the strip (above the notification area when the strip is off), even after you change the screen
-  resolution or scale. Click anywhere else, or press Esc, to close it.
+  resolution or scale. Click anywhere else, or press Esc, to close it. The panel keeps your scroll
+  position when it updates or when you open a card's caret.
 - **Cost** at the top is the Total Spend ring: what Claude, Codex, Cursor, and other spend-tracking
   providers cost Today, Yesterday, or over the last 30 days. Turn it off in Settings.
 - Each provider has its own card with its meters, the plan, and a warning triangle when the last refresh
@@ -27,6 +28,11 @@ The panel follows the Mac popover's layout and colors, in Windows' light or dark
   Launch at Login (on by default), Show Usage As (Left or Used), Icon Style (Text or Bars), a switch per
   provider, Open Folder for logs, and an About section that credits OpenUsage and links to the original
   project.
+- **Keyboard and screen readers:** Tab moves through the panel's buttons and switches (a blue ring shows
+  where you are), Enter or Space presses them, and each has a name that Narrator reads. In Settings, a
+  click anywhere on a switch's row flips it.
+- **If the engine fails**, a notice at the top says why, with **Try Again** to retry right away. With every
+  provider turned off, the panel offers **Open Settings**.
 - **Right-click the tray icon** for Open Quota Tray, Refresh Now, Settings, Launch at Login, Open Log
   Folder, and Quit Quota Tray.
 
@@ -184,7 +190,7 @@ It refuses a version that is already released.
 
 While developing the tray app, set `QUOTATRAY_ENGINE` to a built `openusage-cli.exe` to use an engine
 from another folder. `QuotaTray.exe --render-preview <dashboard.json> <folder>` renders the panel (light and
-dark: dashboard, Settings, and the taskbar strip) to PNGs from a saved dashboard document; CI does this with
+dark: dashboard, Settings, and the taskbar strip; light only: the engine-error notice and the no-providers prompt) to PNGs from a saved dashboard document; CI does this with
 `windows/QuotaTray/Preview/sample-dashboard.json` and uploads the `QuotaTray-windows-screenshots`
 artifact. `windows/scripts/generate_assets.py` regenerates the tray app's icon (Quota Tray's own
 two-meter icon; the OpenUsage logo is the original project's trademark and isn't used) and provider

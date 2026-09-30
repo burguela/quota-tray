@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using QuotaTray.Engine;
@@ -50,6 +52,9 @@ public partial class PopupWindow : Window
     private bool _showingSettings;
     private bool _closing;
     private TextBlock? _footerStatus;
+    private ScrollViewer? _scroller;
+    /// <summary>Which screen <see cref="_scroller"/> shows, so a re-render keeps its scroll position.</summary>
+    private bool _scrollerShowsSettings;
     /// <summary>Preview renders freeze the clock and let the panel grow to its full height.</summary>
     private DateTimeOffset? _previewNow;
 
@@ -106,12 +111,40 @@ public partial class PopupWindow : Window
 
     public void ShowNearTray(bool settings = false)
     {
+        var wasVisible = IsVisible;
         _showingSettings = settings;
+        if (!wasVisible)
+        {
+            // A fresh open starts at the top; re-renders while it's open keep the scroll position.
+            _scroller = null;
+        }
         Render();
         Show();
         PositionNearTray();
         Activate();
         Focus();
+        if (!wasVisible)
+        {
+            PlayOpenAnimation();
+        }
+    }
+
+    /// <summary>
+    /// Windows 11 flyouts fade in while rising a few pixels from the taskbar; do the same, unless the
+    /// user turned animations off (Settings, Accessibility, Visual effects).
+    /// </summary>
+    private void PlayOpenAnimation()
+    {
+        if (!SystemParameters.ClientAreaAnimation)
+        {
+            return;
+        }
+        var duration = new Duration(TimeSpan.FromMilliseconds(170));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var rise = new TranslateTransform(0, 10);
+        Frame.RenderTransform = rise;
+        rise.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(10, 0, duration) { EasingFunction = ease });
+        Frame.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, duration) { EasingFunction = ease });
     }
 
     public void Update(Dashboard? dashboard, string? engineError, bool refreshing)
@@ -131,9 +164,10 @@ public partial class PopupWindow : Window
     /// Renders the panel for <c>--render-preview</c> and hands back its frame, detached from this
     /// window so it can lay out at full height (a window can't grow past the screen).
     /// </summary>
-    public FrameworkElement RenderForPreview(Dashboard dashboard, bool settings, bool expandFirstProvider)
+    public FrameworkElement RenderForPreview(Dashboard dashboard, bool settings, bool expandFirstProvider, string? engineError = null)
     {
         _dashboard = dashboard;
+        _engineError = engineError;
         _showingSettings = settings;
         _previewNow = dashboard.GeneratedAt;
         if (expandFirstProvider && dashboard.Providers.FirstOrDefault(p => p.Enabled) is { } first)
@@ -208,6 +242,7 @@ public partial class PopupWindow : Window
         Frame.BorderBrush = theme.PanelBorder;
         Foreground = theme.TextPrimary;
         Resources["ScrollThumbBrush"] = theme.ScrollThumb;
+        var focusKey = FocusedControlKey();
         Root.Children.Clear();
 
         if (_showingSettings)
@@ -233,7 +268,10 @@ public partial class PopupWindow : Window
         {
             BuildDashboard(body, theme);
         }
-        Root.Children.Add(new ScrollViewer
+        // Keep the reader's place when a refresh lands or a caret, period, or switch re-renders the
+        // panel; switching between the dashboard and Settings starts the new screen at the top.
+        var offset = _scroller != null && _scrollerShowsSettings == _showingSettings ? _scroller.VerticalOffset : 0;
+        _scroller = new ScrollViewer
         {
             Content = body,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -243,7 +281,56 @@ public partial class PopupWindow : Window
                 ? double.PositiveInfinity
                 : Math.Max(240, WorkAreaHeight() - 24 - 16 - 64 - (_showingSettings ? 44 : 0)),
             Focusable = false,
+        };
+        _scrollerShowsSettings = _showingSettings;
+        // Applied on the next layout pass, once the new content has a height to scroll through.
+        _scroller.ScrollToVerticalOffset(offset);
+        Root.Children.Add(_scroller);
+        if (focusKey != null)
+        {
+            RestoreFocus(focusKey);
+        }
+    }
+
+    /// <summary>The automation id or name of the control that has keyboard focus, if it's in the panel.</summary>
+    private string? FocusedControlKey()
+    {
+        if (Keyboard.FocusedElement is not DependencyObject focused || !Root.IsAncestorOf(focused))
+        {
+            return null;
+        }
+        var id = AutomationProperties.GetAutomationId(focused);
+        return string.IsNullOrEmpty(id) ? NullIfEmpty(AutomationProperties.GetName(focused)) : id;
+    }
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
+    /// <summary>
+    /// A re-render replaces every control, so keyboard focus would fall back to the window and the next
+    /// Tab would start over. Move it to the rebuilt control with the same key instead.
+    /// </summary>
+    private void RestoreFocus(string key) =>
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            var match = Descendants(Root).FirstOrDefault(element => element.Focusable &&
+                (AutomationProperties.GetAutomationId(element) == key || AutomationProperties.GetName(element) == key));
+            match?.Focus();
         });
+
+    private static IEnumerable<UIElement> Descendants(DependencyObject parent)
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is UIElement element)
+            {
+                yield return element;
+            }
+            foreach (var descendant in Descendants(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     /// <summary>The taskbar monitor's current work-area height, read live so a resolution change counts.</summary>
@@ -269,7 +356,7 @@ public partial class PopupWindow : Window
         var back = new StackPanel { Orientation = Orientation.Horizontal };
         back.Children.Add(Glyph(Glyphs.ChevronLeft, theme.TextPrimary, 10, stroke: 1.6, margin: new Thickness(0, 0, 5, 0)));
         back.Children.Add(Text("Back", theme.TextPrimary, 13, FontWeights.Medium, verticalAlignment: VerticalAlignment.Center));
-        var button = Capsule(back, theme, () => ShowScreen(settings: false), new Thickness(10, 0, 14, 0));
+        var button = Capsule(back, theme, () => ShowScreen(settings: false), new Thickness(10, 0, 14, 0), "Back");
         button.HorizontalAlignment = HorizontalAlignment.Left;
         grid.Children.Add(button);
         return grid;
@@ -296,6 +383,9 @@ public partial class PopupWindow : Window
         identity.Children.Add(Text($"Quota Tray {AppVersion}", theme.TextSecondary, 11));
         _footerStatus = Text("", theme.TextSecondary, 11);
         _footerStatus.Cursor = Cursors.Hand;
+        // Underlined under the pointer, so it reads as the refresh link it is.
+        _footerStatus.MouseEnter += (sender, _) => ((TextBlock)sender).TextDecorations = TextDecorations.Underline;
+        _footerStatus.MouseLeave += (sender, _) => ((TextBlock)sender).TextDecorations = null;
         _footerStatus.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
@@ -320,7 +410,7 @@ public partial class PopupWindow : Window
                 new("Open Log Folder", _actions.OpenLogFolder),
                 MenuItemSpec.Separator,
                 new("Quit Quota Tray", _actions.Quit),
-            }), new Thickness(14, 0, 12, 0));
+            }), new Thickness(14, 0, 12, 0), "Options");
             Grid.SetColumn(options, 1);
             grid.Children.Add(options);
         }

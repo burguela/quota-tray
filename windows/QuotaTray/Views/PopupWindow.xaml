@@ -43,6 +43,7 @@
         <Border.Effect>
             <DropShadowEffect BlurRadius="20" ShadowDepth="3" Opacity="0.3" />
         </Border.Effect>
-        <DockPanel x:Name="Root" LastChildFill="True" />
+        <!-- Tab cycles through the panel's controls instead of leaving it. -->
+        <DockPanel x:Name="Root" LastChildFill="True" KeyboardNavigation.TabNavigation="Cycle" />
     </Border>
 </Window>

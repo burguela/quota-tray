@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -85,11 +86,20 @@ public partial class PopupWindow
         Child = child,
     };
 
-    /// <summary>Makes an element clickable (mouse and keyboard) with an optional hover fill.</summary>
-    private static T Clickable<T>(T element, Action onClick, Brush? hover = null, Brush? rest = null) where T : Border
+    /// <summary>
+    /// Makes an element clickable (mouse and keyboard) with an optional hover fill, a focus ring for
+    /// keyboard users that follows its corners, and a name for screen readers.
+    /// </summary>
+    private static Pressable Clickable(Pressable element, Action onClick, Brush? hover = null, Brush? rest = null, string? name = null)
     {
+        element.OnPress = onClick;
         element.Cursor = Cursors.Hand;
         element.Focusable = true;
+        element.FocusVisualStyle = FocusRing(element.CornerRadius.TopLeft);
+        if (name != null)
+        {
+            AutomationProperties.SetName(element, name);
+        }
         element.Background ??= Brushes.Transparent;
         var resting = rest ?? element.Background;
         if (hover != null)
@@ -113,9 +123,27 @@ public partial class PopupWindow
         return element;
     }
 
+    /// <summary>
+    /// The keyboard focus ring (shown only when focus arrives by keyboard): a 2px accent outline just
+    /// outside the element, rounded to match its <paramref name="cornerRadius"/>.
+    /// </summary>
+    internal static Style FocusRing(double cornerRadius)
+    {
+        var ring = new FrameworkElementFactory(typeof(Border));
+        ring.SetValue(Border.BorderBrushProperty, Theme.Current.Blue);
+        ring.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(cornerRadius + 2));
+        ring.SetValue(FrameworkElement.MarginProperty, new Thickness(-3));
+        ring.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
+        var style = new Style(typeof(Control));
+        style.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate(typeof(Control)) { VisualTree = ring }));
+        style.Seal();
+        return style;
+    }
+
     /// <summary>The 28px chrome capsule the Mac footer and navigation bar use (Options, Back).</summary>
-    private static Border Capsule(UIElement content, Theme theme, Action onClick, Thickness padding) =>
-        Clickable(new Border
+    private static Pressable Capsule(UIElement content, Theme theme, Action onClick, Thickness padding, string? name = null) =>
+        Clickable(new Pressable
         {
             Height = 28,
             CornerRadius = new CornerRadius(14),
@@ -125,17 +153,17 @@ public partial class PopupWindow
             Padding = padding,
             VerticalAlignment = VerticalAlignment.Center,
             Child = content,
-        }, onClick, theme.Hover, theme.ChromeFill);
+        }, onClick, theme.Hover, theme.ChromeFill, name);
 
     /// <summary>A small bordered push button (the Mac's .bordered, .small control).</summary>
-    private static Border SmallButton(UIElement content, Theme theme, Action onClick) =>
-        Clickable(new Border
+    private static Pressable SmallButton(UIElement content, Theme theme, Action onClick, string? name = null) =>
+        Clickable(new Pressable
         {
             CornerRadius = new CornerRadius(5),
             Background = theme.ButtonFill,
             Padding = new Thickness(8, 3, 8, 4),
             Child = content,
-        }, onClick, theme.ButtonHover, theme.ButtonFill);
+        }, onClick, theme.ButtonHover, theme.ButtonFill, name);
 
     /// <summary>
     /// A pop-up menu styled like a Mac menu (rounded, shadowed, blue highlight), opening above or below
@@ -174,13 +202,13 @@ public partial class PopupWindow
             Grid.SetColumn(label, 1);
             row.Children.Add(check);
             row.Children.Add(label);
-            var entry = new Border { CornerRadius = new CornerRadius(5), Padding = new Thickness(6, 3, 12, 4), Child = row };
+            var entry = new Pressable { CornerRadius = new CornerRadius(5), Padding = new Thickness(6, 3, 12, 4), Child = row };
             var action = item.Action;
             Clickable(entry, () =>
             {
                 popup.IsOpen = false;
                 action?.Invoke();
-            });
+            }, name: item.Label);
             entry.MouseEnter += (_, _) =>
             {
                 entry.Background = theme.Blue;

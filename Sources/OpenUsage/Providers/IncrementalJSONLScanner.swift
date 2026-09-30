@@ -1,5 +1,13 @@
 import Foundation
 
+extension Date {
+    /// File times come back from different APIs (Foundation, `FindFirstFileExW`) that can disagree in the
+    /// last floating-point bit, so a cache hit compares them to the millisecond rather than exactly.
+    func isSameFileTimestamp(as other: Date) -> Bool {
+        abs(timeIntervalSince(other)) < 0.001
+    }
+}
+
 /// The `Item`-independent half of the incremental scan machinery: file discovery and the scan-window
 /// lower bound. A non-generic namespace keeps file discovery independent of each provider's parsed
 /// row type and lets call sites read `JSONLScanning.sinceDate(...)`.
@@ -24,6 +32,16 @@ enum JSONLScanning {
         // `FileManager.enumerator` silently yields nothing when `dir` itself is a symlink.
         // Resolve first so the enumeration sees the real directory.
         let dir = dir.resolvingSymlinksInPath()
+        #if os(Windows)
+        return windowsJSONLFiles(under: dir)
+        #else
+        return foundationJSONLFiles(under: dir)
+        #endif
+    }
+
+    /// The portable walk: Foundation's enumerator and a `resourceValues` call per file. Windows uses it
+    /// only as the reference its native walk is tested against.
+    static func foundationJSONLFiles(under dir: URL) -> [DiscoveredFile] {
         let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
         guard let enumerator = FileManager.default.enumerator(
             at: dir, includingPropertiesForKeys: keys, options: []
@@ -150,7 +168,7 @@ actor IncrementalJSONLScanner<Item: Codable & Sendable> {
         var toParse: [JSONLScanning.DiscoveredFile] = []
         for file in files {
             guard file.mtime >= since else { continue }
-            if let cached = currentCache[file.path], cached.size == file.size, cached.mtime == file.mtime {
+            if let cached = currentCache[file.path], cached.size == file.size, cached.mtime.isSameFileTimestamp(as: file.mtime) {
                 nextCache[file.path] = cached
             } else {
                 nextCache[file.path] = nil

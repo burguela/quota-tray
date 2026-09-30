@@ -215,6 +215,30 @@ final class JSONLScannerCancellationTests: XCTestCase {
         return await condition()
     }
 
+    /// On Windows `jsonlFiles` walks with `FindFirstFileExW`; it must report exactly what the portable
+    /// Foundation walk does (same path strings, since those key the parse cache), and elsewhere the two
+    /// are the same walk.
+    func testNativeFileDiscoveryMatchesTheFoundationWalk() throws {
+        let base = try makeDirectory("NativeDiscovery")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let fileManager = FileManager.default
+        let nested = base.appendingPathComponent("a/b/c", isDirectory: true)
+        try fileManager.createDirectory(at: nested, withIntermediateDirectories: true)
+        for relative in ["one.jsonl", "a/two.jsonl", "a/b/three.jsonl", "a/b/c/four.jsonl", "notes.txt", "a/b/c/five.json"] {
+            try Data(relative.utf8).write(to: base.appendingPathComponent(relative))
+        }
+
+        let native = JSONLScanning.jsonlFiles(under: base)
+        let reference = JSONLScanning.foundationJSONLFiles(under: base.resolvingSymlinksInPath())
+
+        XCTAssertEqual(native.count, 4)
+        XCTAssertEqual(native.map(\.path), reference.map(\.path))
+        XCTAssertEqual(native.map(\.size), reference.map(\.size))
+        for (lhs, rhs) in zip(native, reference) {
+            XCTAssertTrue(lhs.mtime.isSameFileTimestamp(as: rhs.mtime), "\(lhs.path): \(lhs.mtime) vs \(rhs.mtime)")
+        }
+    }
+
     func testFileDiscoveryStopsWhenTheTaskIsCancelled() async throws {
         let base = try makeDirectory("Discovery")
         defer { try? FileManager.default.removeItem(at: base) }

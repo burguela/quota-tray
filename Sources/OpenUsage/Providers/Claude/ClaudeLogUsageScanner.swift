@@ -425,7 +425,7 @@ actor ClaudeLogUsageScanner {
         _ file: JSONLScanning.DiscoveredFile
     ) -> ClaudeSessionIdentity? {
         if let cached = sessionOwnership[file.path],
-           cached.size == file.size, cached.mtime == file.mtime
+           cached.size == file.size, cached.mtime.isSameFileTimestamp(as: file.mtime)
         {
             return cached.identity
         }

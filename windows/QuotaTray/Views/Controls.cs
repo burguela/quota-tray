@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Input;
 using System.Windows.Media;
 using QuotaTray.Services;
@@ -189,8 +190,13 @@ public sealed class ToggleSwitch : FrameworkElement
         Height = SwitchHeight;
         Cursor = Cursors.Hand;
         Focusable = true;
+        FocusVisualStyle = PopupWindow.FocusRing(SwitchHeight / 2);
         VerticalAlignment = VerticalAlignment.Center;
     }
+
+    public bool IsOn => _isOn;
+
+    protected override AutomationPeer OnCreateAutomationPeer() => new ToggleSwitchPeer(this);
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
@@ -207,10 +213,12 @@ public sealed class ToggleSwitch : FrameworkElement
         }
     }
 
-    private void Flip()
+    /// <summary>Flips the switch, as a click, Space/Enter, a click on its row, or a screen reader does.</summary>
+    internal void Flip()
     {
         _isOn = !_isOn;
         InvalidateVisual();
+        (UIElementAutomationPeer.FromElement(this) as ToggleSwitchPeer)?.RaiseToggled(!_isOn, _isOn);
         _onChange(_isOn);
     }
 

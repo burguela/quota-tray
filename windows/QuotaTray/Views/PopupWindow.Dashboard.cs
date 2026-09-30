@@ -47,8 +47,7 @@ public partial class PopupWindow
         var enabled = _dashboard.Providers.Where(p => p.Enabled).ToList();
         if (enabled.Count == 0)
         {
-            body.Children.Add(Text("Open Settings to choose what to show.", theme.TextSecondary, 13,
-                margin: new Thickness(16, 24, 16, 24), horizontalAlignment: HorizontalAlignment.Center, wrap: true));
+            body.Children.Add(NoProviders(theme));
             return;
         }
         for (var index = 0; index < enabled.Count; index++)
@@ -62,17 +61,42 @@ public partial class PopupWindow
         }
     }
 
-    /// <summary>The engine couldn't run or answer: an orange-flagged card above everything else.</summary>
-    private static UIElement EngineNotice(string message, Theme theme)
+    /// <summary>
+    /// The engine couldn't run or answer: an orange-flagged card above everything else, with a Try Again
+    /// button so there's no need to wait for the next automatic update.
+    /// </summary>
+    private UIElement EngineNotice(string message, Theme theme)
     {
         var row = new DockPanel();
         var icon = Glyph(Glyphs.Warning, theme.Orange, 13, margin: new Thickness(0, 1, 8, 0));
         icon.VerticalAlignment = VerticalAlignment.Top;
         row.Children.Add(icon);
-        row.Children.Add(Text(message, theme.TextPrimary, SupportingSize, wrap: true));
+        var content = new StackPanel();
+        content.Children.Add(Text(message, theme.TextPrimary, SupportingSize, wrap: true));
+        FrameworkElement retry = _refreshing
+            ? Text("Updating…", theme.TextSecondary, SupportingSize)
+            : SmallButton(Text("Try Again", theme.TextPrimary, SupportingSize, FontWeights.Medium), theme, _actions.RefreshNow, "Try Again");
+        retry.HorizontalAlignment = HorizontalAlignment.Left;
+        retry.Margin = new Thickness(0, 8, 0, 0);
+        content.Children.Add(retry);
+        row.Children.Add(content);
         var card = Card(row, theme, new Thickness(RowInset, 10, RowInset, 10));
         card.Margin = new Thickness(0, 0, 0, SectionSpacing);
         return card;
+    }
+
+    /// <summary>Every provider is off: say so, with a button straight to the switches in Settings.</summary>
+    private UIElement NoProviders(Theme theme)
+    {
+        var panel = new StackPanel { Margin = new Thickness(16, 24, 16, 24), HorizontalAlignment = HorizontalAlignment.Center };
+        panel.Children.Add(Text("No providers are turned on.", theme.TextSecondary, 13,
+            horizontalAlignment: HorizontalAlignment.Center, wrap: true));
+        var open = SmallButton(Text("Open Settings", theme.TextPrimary, SupportingSize, FontWeights.Medium), theme,
+            () => ShowScreen(settings: true), "Open Settings");
+        open.HorizontalAlignment = HorizontalAlignment.Center;
+        open.Margin = new Thickness(0, 10, 0, 0);
+        panel.Children.Add(open);
+        return panel;
     }
 
     // MARK: - Total Spend
@@ -116,25 +140,32 @@ public partial class PopupWindow
         foreach (var period in periods)
         {
             var selected = period.Id == selectedId;
-            var segment = new Border
+            var label = Text(period.Label, selected ? theme.TextPrimary : theme.TextSecondary, 11,
+                selected ? FontWeights.SemiBold : FontWeights.Medium, horizontalAlignment: HorizontalAlignment.Center);
+            var segment = new Pressable
             {
                 CornerRadius = new CornerRadius(12),
                 Padding = new Thickness(12, 4, 12, 5),
                 Margin = new Thickness(1, 0, 1, 0),
                 Background = selected ? theme.SegmentSelected : Brushes.Transparent,
-                Child = Text(period.Label, selected ? theme.TextPrimary : theme.TextSecondary, 11,
-                    selected ? FontWeights.SemiBold : FontWeights.Medium, horizontalAlignment: HorizontalAlignment.Center),
+                Child = label,
             };
             if (selected)
             {
                 segment.Effect = new DropShadowEffect { BlurRadius = 4, ShadowDepth = 1, Opacity = 0.12, Direction = 270 };
+            }
+            else
+            {
+                // Unselected periods brighten under the pointer, like the Mac picker's segments.
+                segment.MouseEnter += (_, _) => label.Foreground = theme.TextPrimary;
+                segment.MouseLeave += (_, _) => label.Foreground = theme.TextSecondary;
             }
             var id = period.Id;
             grid.Children.Add(Clickable(segment, () =>
             {
                 UiSettings.SpendPeriod = id;
                 Render();
-            }));
+            }, name: period.Label));
         }
         return new Border
         {
@@ -204,7 +235,7 @@ public partial class PopupWindow
         AddRows(rows, always, theme);
         if (hasExpandedContent)
         {
-            rows.Children.Add(ExpandToggle(provider.Id, expanded, theme));
+            rows.Children.Add(ExpandToggle(provider, expanded, theme));
         }
         if (expanded)
         {
@@ -363,21 +394,30 @@ public partial class PopupWindow
     }
 
     /// <summary>The centered caret that shows or hides On Demand rows and the provider's links.</summary>
-    private UIElement ExpandToggle(string providerId, bool expanded, Theme theme)
+    private UIElement ExpandToggle(ProviderInfo provider, bool expanded, Theme theme)
     {
-        var caret = new Border
+        var chevron = (System.Windows.Shapes.Path)Glyph(expanded ? Glyphs.ChevronUp : Glyphs.ChevronDown, theme.TextSecondary, 10, stroke: 1.7);
+        var caret = new Pressable
         {
             Padding = new Thickness(0, 5, 0, 5),
-            Child = Glyph(expanded ? Glyphs.ChevronUp : Glyphs.ChevronDown, theme.TextSecondary, 10, stroke: 1.7),
+            Margin = new Thickness(8, 0, 8, 0),
+            CornerRadius = new CornerRadius(6),
+            Child = chevron,
         };
+        // The chevron darkens under the pointer, so the whole strip reads as the button it is.
+        caret.MouseEnter += (_, _) => chevron.Stroke = theme.TextPrimary;
+        caret.MouseLeave += (_, _) => chevron.Stroke = theme.TextSecondary;
+        var id = provider.Id;
+        // A stable id (the name flips between More and Less) so keyboard focus survives the re-render.
+        System.Windows.Automation.AutomationProperties.SetAutomationId(caret, $"expand-{id}");
         return Clickable(caret, () =>
         {
-            if (!_expandedProviders.Remove(providerId))
+            if (!_expandedProviders.Remove(id))
             {
-                _expandedProviders.Add(providerId);
+                _expandedProviders.Add(id);
             }
             Render();
-        });
+        }, name: $"{(expanded ? "Show Less" : "Show More")} for {provider.DisplayName}");
     }
 
     /// <summary>Quick links as small bordered buttons, up to three per row.</summary>
@@ -394,7 +434,7 @@ public partial class PopupWindow
             content.Children.Add(Text(link.Label, theme.TextPrimary, SupportingSize, FontWeights.Medium));
             content.Children.Add(Glyph(Glyphs.ArrowUpRight, theme.TextSecondary, 8, stroke: 1.3, margin: new Thickness(4, 1, 0, 0)));
             var url = link.Url;
-            var button = SmallButton(content, theme, () => OpenUrl(url));
+            var button = SmallButton(content, theme, () => OpenUrl(url), link.Label);
             button.Margin = new Thickness(3);
             grid.Children.Add(button);
         }

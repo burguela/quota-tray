@@ -22,9 +22,7 @@ public static class PreviewRenderer
 {
     public static int Run(string dashboardPath, string outputFolder)
     {
-        var dashboard = JsonSerializer.Deserialize<Dashboard>(File.ReadAllText(dashboardPath),
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-            ?? throw new InvalidOperationException($"{dashboardPath} is not a dashboard document.");
+        var dashboard = Load(dashboardPath);
         Directory.CreateDirectory(outputFolder);
         foreach (var dark in new[] { false, true })
         {
@@ -39,7 +37,30 @@ public static class PreviewRenderer
             }
             TrayPreview.Save(dashboard, dark, Path.Combine(outputFolder, $"tray-{(dark ? "dark" : "light")}.png"));
         }
+
+        // The panel's two edge states, light only: the engine failed (the notice with Try Again), and
+        // every provider is off (the Open Settings prompt).
+        Theme.Force(false);
+        SaveState(dashboard, "The Quota Tray engine didn't answer in time. Check the log folder for details.",
+            Path.Combine(outputFolder, "notice-light.png"));
+        var empty = Load(dashboardPath);
+        empty.TotalSpend = null;
+        empty.Providers.ForEach(p => p.Enabled = false);
+        SaveState(empty, null, Path.Combine(outputFolder, "no-providers-light.png"));
         return 0;
+    }
+
+    private static Dashboard Load(string path) =>
+        JsonSerializer.Deserialize<Dashboard>(File.ReadAllText(path),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidOperationException($"{path} is not a dashboard document.");
+
+    private static void SaveState(Dashboard dashboard, string? engineError, string path)
+    {
+        var window = new PopupWindow(new NoActions());
+        var panel = window.RenderForPreview(dashboard, settings: false, expandFirstProvider: false, engineError);
+        Save(panel, window, path);
+        window.Close();
     }
 
     private static void Save(FrameworkElement panel, Window window, string path)

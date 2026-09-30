@@ -2,6 +2,12 @@ import Foundation
 import XCTest
 @testable import OpenUsage
 
+/// `Thread.sleep` is unavailable from async contexts; a plain function stands in for work that never
+/// checks for cancellation.
+private func blockThreadIgnoringCancellation(seconds: TimeInterval) {
+    Thread.sleep(forTimeInterval: seconds)
+}
+
 final class LocalUsageScanBudgetTests: XCTestCase {
     func testReturnsTheScanResultWithinBudget() async {
         let result = await LocalUsageScanBudget.run(budget: .seconds(30), providerID: "test") { 42 }
@@ -28,7 +34,7 @@ final class LocalUsageScanBudgetTests: XCTestCase {
     func testReturnsAtTheBudgetEvenWhenTheScanIgnoresCancellation() async {
         let start = ContinuousClock.now
         let result = await LocalUsageScanBudget.run(budget: .milliseconds(50), providerID: "test") { () -> Int? in
-            Thread.sleep(forTimeInterval: 3)
+            blockThreadIgnoringCancellation(seconds: 3)
             return 1
         }
         let elapsed = ContinuousClock.now - start
@@ -40,7 +46,7 @@ final class LocalUsageScanBudgetTests: XCTestCase {
         let start = ContinuousClock.now
         let task = Task {
             await LocalUsageScanBudget.run(budget: .seconds(30), providerID: "test") { () -> Int? in
-                Thread.sleep(forTimeInterval: 3)
+                blockThreadIgnoringCancellation(seconds: 3)
                 return 1
             }
         }

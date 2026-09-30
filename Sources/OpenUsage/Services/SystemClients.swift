@@ -139,6 +139,10 @@ struct SQLiteCLIAccessor: SQLiteAccessing {
         case readWrite, readOnly, queryOnly
     }
 
+    /// A cold `sqlite3` launch on a loaded Windows machine (antivirus scanning the exe, a CI runner under
+    /// load) can take longer than 5s, which failed the Antigravity schema tests on slow runners.
+    private static let processTimeout: TimeInterval = 15
+
     private func run(path: String, sql: String, mode: OpenMode = .readWrite) throws -> ProcessResult {
         var arguments = ["-batch", "-noheader"]
         switch mode {
@@ -155,7 +159,7 @@ struct SQLiteCLIAccessor: SQLiteAccessing {
             executable: Self.sqliteExecutable,
             arguments: arguments,
             environment: [:],
-            timeout: 5
+            timeout: Self.processTimeout
         )
     }
 

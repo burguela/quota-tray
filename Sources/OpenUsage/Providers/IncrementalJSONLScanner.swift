@@ -18,7 +18,8 @@ enum JSONLScanning {
     }
 
     /// Every `*.jsonl` regular file under `dir` (recursively), path-sorted so a keep-first dedup is
-    /// deterministic. Empty when `dir` can't be enumerated.
+    /// deterministic. Empty when `dir` can't be enumerated, or when the calling task is cancelled
+    /// mid-walk (callers check `Task.isCancelled` before trusting an empty result).
     static func jsonlFiles(under dir: URL) -> [DiscoveredFile] {
         // `FileManager.enumerator` silently yields nothing when `dir` itself is a symlink.
         // Resolve first so the enumeration sees the real directory.
@@ -29,6 +30,8 @@ enum JSONLScanning {
         ) else { return [] }
         var files: [DiscoveredFile] = []
         for case let url as URL in enumerator {
+            // Bail out mid-walk: on a large history and a slow disk this is the longest stretch of a scan.
+            if Task.isCancelled { return [] }
             guard url.pathExtension == "jsonl",
                   let values = try? url.resourceValues(forKeys: Set(keys)),
                   values.isRegularFile == true

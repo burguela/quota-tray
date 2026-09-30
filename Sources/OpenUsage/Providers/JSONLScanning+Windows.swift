@@ -14,7 +14,7 @@ extension JSONLScanning {
         while let directory = pending.popLast() {
             if Task.isCancelled { return [] }
             // The `\?\` prefix lifts the 260-character limit that deep project folders can exceed.
-            let pattern = "\\?\\" + directory.path.replacingOccurrences(of: "/", with: "\\") + "\*"
+            let pattern = "\\\\?\\" + directory.path.replacingOccurrences(of: "/", with: "\\") + "\\*"
             var entry = WIN32_FIND_DATAW()
             let handle = pattern.withCString(encodedAs: UTF16.self) {
                 FindFirstFileExW($0, FindExInfoBasic, &entry, FindExSearchNameMatch, nil, DWORD(FIND_FIRST_EX_LARGE_FETCH))

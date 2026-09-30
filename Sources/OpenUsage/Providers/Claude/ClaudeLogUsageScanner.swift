@@ -120,7 +120,14 @@ actor ClaudeLogUsageScanner {
             return nil
         }
 
+        let discoveryStart = ContinuousClock.now
         var files = Self.usageFiles(under: roots)
+        let discoveryTime = ContinuousClock.now - discoveryStart
+        if Task.isCancelled {
+            AppLog.info(LogTag.plugin("claude"), "local usage log discovery interrupted after \(discoveryTime)")
+        } else if discoveryTime > .seconds(5) {
+            AppLog.info(LogTag.plugin("claude"), "discovered \(files.count) local usage logs in \(discoveryTime)")
+        }
         if organizationID != nil || claimsDefaultHome {
             let ownershipStart = ContinuousClock.now
             files = ownedUsageFiles(files, since: since, claimsDefaultHome: claimsDefaultHome)

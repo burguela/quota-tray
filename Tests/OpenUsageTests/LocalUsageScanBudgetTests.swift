@@ -22,6 +22,34 @@ final class LocalUsageScanBudgetTests: XCTestCase {
         // Returning promptly proves the scan was cancelled rather than awaited to the end.
         XCTAssertLessThan(ContinuousClock.now - start, .seconds(10))
     }
+
+    /// Regression: a scan stuck in work that never checks for cancellation (a slow directory walk) held the
+    /// refresh past its budget, because the task group waited for that child; Windows refreshes ran 90-120s.
+    func testReturnsAtTheBudgetEvenWhenTheScanIgnoresCancellation() async {
+        let start = ContinuousClock.now
+        let result = await LocalUsageScanBudget.run(budget: .milliseconds(50), providerID: "test") { () -> Int? in
+            Thread.sleep(forTimeInterval: 3)
+            return 1
+        }
+        let elapsed = ContinuousClock.now - start
+        XCTAssertNil(result)
+        XCTAssertLessThan(elapsed, .seconds(2))
+    }
+
+    func testReturnsPromptlyWhenTheCallerIsCancelled() async {
+        let start = ContinuousClock.now
+        let task = Task {
+            await LocalUsageScanBudget.run(budget: .seconds(30), providerID: "test") { () -> Int? in
+                Thread.sleep(forTimeInterval: 3)
+                return 1
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        let result = await task.value
+        XCTAssertNil(result)
+        XCTAssertLessThan(ContinuousClock.now - start, .seconds(2))
+    }
 }
 
 @MainActor

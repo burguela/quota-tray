@@ -215,6 +215,22 @@ final class JSONLScannerCancellationTests: XCTestCase {
         return await condition()
     }
 
+    func testFileDiscoveryStopsWhenTheTaskIsCancelled() async throws {
+        let base = try makeDirectory("Discovery")
+        defer { try? FileManager.default.removeItem(at: base) }
+        try Data("1".utf8).write(to: base.appendingPathComponent("a.jsonl"))
+        XCTAssertEqual(JSONLScanning.jsonlFiles(under: base).count, 1)
+
+        // The task is cancelled before its body runs, so the walk must bail out on its first entry.
+        let task = Task { () -> Int in
+            while !Task.isCancelled { await Task.yield() }
+            return JSONLScanning.jsonlFiles(under: base).count
+        }
+        task.cancel()
+        let discovered = await task.value
+        XCTAssertEqual(discovered, 0)
+    }
+
     private func makeDirectory(_ suffix: String) throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("OpenUsageScannerCancellation\(suffix)-\(UUID().uuidString)", isDirectory: true)

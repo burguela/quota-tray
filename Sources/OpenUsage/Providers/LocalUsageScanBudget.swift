@@ -13,23 +13,76 @@ enum LocalUsageScanBudget {
     private enum Outcome<Value: Sendable>: Sendable {
         case finished(Value)
         case overBudget
+        case cancelled
     }
 
-    /// The scan's result, or `nil` when `budget` elapsed first (or the caller was cancelled).
+    /// One-shot hand-off between the scan, the budget timer and the caller's own cancellation: the first
+    /// outcome wins and resumes the caller, and the other tasks are then cancelled but never awaited.
+    private final class Race<Value: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var resolved: Outcome<Value>?
+        private var continuation: CheckedContinuation<Outcome<Value>, Never>?
+        private var tasks: [Task<Void, Never>] = []
+
+        func install(_ continuation: CheckedContinuation<Outcome<Value>, Never>) {
+            lock.lock()
+            if let resolved {
+                lock.unlock()
+                continuation.resume(returning: resolved)
+            } else {
+                self.continuation = continuation
+                lock.unlock()
+            }
+        }
+
+        func adopt(_ task: Task<Void, Never>) {
+            lock.lock()
+            let alreadyResolved = resolved != nil
+            if !alreadyResolved { tasks.append(task) }
+            lock.unlock()
+            if alreadyResolved { task.cancel() }
+        }
+
+        func finish(_ outcome: Outcome<Value>) {
+            lock.lock()
+            guard resolved == nil else {
+                lock.unlock()
+                return
+            }
+            resolved = outcome
+            let continuation = self.continuation
+            self.continuation = nil
+            let tasks = self.tasks
+            self.tasks = []
+            lock.unlock()
+            continuation?.resume(returning: outcome)
+            for task in tasks { task.cancel() }
+        }
+    }
+
+    /// The scan's result, or `nil` when `budget` elapsed first (or the caller was cancelled). Returns as
+    /// soon as the budget elapses, even if the scan is stuck in work that never checks for cancellation
+    /// (a slow directory walk, a blocking read): a structured task group would wait for that child and
+    /// let the refresh run into the provider's hard deadline, which publishes nothing at all. The
+    /// cancelled scan winds down in the background and its finished files stay in the parse cache.
     static func run<Value: Sendable>(
         budget: Duration,
         providerID: String,
         _ scan: @escaping @Sendable () async -> Value
     ) async -> Value? {
-        let outcome = await withTaskGroup(of: Outcome<Value>.self) { group in
-            group.addTask { .finished(await scan()) }
-            group.addTask {
-                try? await Task.sleep(for: budget)
-                return .overBudget
+        let race = Race<Value>()
+        let outcome = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Outcome<Value>, Never>) in
+                race.install(continuation)
+                race.adopt(Task { race.finish(.finished(await scan())) })
+                race.adopt(Task {
+                    try? await Task.sleep(for: budget)
+                    guard !Task.isCancelled else { return }
+                    race.finish(.overBudget)
+                })
             }
-            let first = await group.next() ?? .overBudget
-            group.cancelAll()
-            return first
+        } onCancel: {
+            race.finish(.cancelled)
         }
         switch outcome {
         case let .finished(value):
@@ -42,6 +95,8 @@ enum LocalUsageScanBudget {
                         + "the history scan resumes on the next refresh"
                 )
             }
+            return nil
+        case .cancelled:
             return nil
         }
     }

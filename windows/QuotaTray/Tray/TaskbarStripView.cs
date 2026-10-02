@@ -46,8 +46,11 @@ public static class TaskbarStripView
                 .Where(g => g.Metrics.Count > 0)
                 .ToList();
 
-    /// <summary>The strip content, or the app icon alone when nothing has data (as on the Mac).</summary>
-    public static FrameworkElement Build(IReadOnlyList<StripGroup> groups, Color foreground)
+    /// <summary>
+    /// The strip content, or the app icon alone when nothing has data (as on the Mac). With
+    /// <paramref name="updateAvailable"/>, a small blue up-arrow badge sits at the end.
+    /// </summary>
+    public static FrameworkElement Build(IReadOnlyList<StripGroup> groups, Color foreground, bool updateAvailable = false)
     {
         var brush = new SolidColorBrush(foreground);
         brush.Freeze();
@@ -59,6 +62,7 @@ public static class TaskbarStripView
         if (groups.Count == 0)
         {
             strip.Children.Add(new Image { Source = AppIconImage.Value, Width = GlyphSide, Height = GlyphSide });
+            AddUpdateBadge(strip, updateAvailable);
             return strip;
         }
         for (var i = 0; i < groups.Count; i++)
@@ -73,7 +77,40 @@ public static class TaskbarStripView
             segment.Children.Add(Values(group.Metrics, brush));
             strip.Children.Add(segment);
         }
+        AddUpdateBadge(strip, updateAvailable);
         return strip;
+    }
+
+    /// <summary>A blue disc with a white up-arrow: "a new version is ready", readable on light and dark taskbars.</summary>
+    private static void AddUpdateBadge(StackPanel strip, bool updateAvailable)
+    {
+        if (!updateAvailable)
+        {
+            return;
+        }
+        var badge = new Grid
+        {
+            Width = GlyphSide - 2,
+            Height = GlyphSide - 2,
+            Margin = new Thickness(strip.Children.Count == 0 ? 0 : GroupSpacing, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        badge.Children.Add(new System.Windows.Shapes.Ellipse { Fill = new SolidColorBrush(Color.FromRgb(0x2F, 0x80, 0xED)) });
+        badge.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M4,8 L4,0.8 M0.8,3.8 L4,0.8 L7.2,3.8"),
+            Stroke = Brushes.White,
+            StrokeThickness = 1.8,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Width = 8,
+            Height = 9,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        strip.Children.Add(badge);
     }
 
     private static FrameworkElement Glyph(string providerId, Brush brush)

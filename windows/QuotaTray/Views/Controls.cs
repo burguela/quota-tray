@@ -241,6 +241,7 @@ public static class Glyphs
 {
     public static readonly Geometry ChevronDown = Parse("M1,3.5 L6,8.5 L11,3.5");
     public static readonly Geometry ChevronUp = Parse("M1,8.5 L6,3.5 L11,8.5");
+    public static readonly Geometry ArrowUp = Parse("M6,10.5 L6,1.5 M2,5.5 L6,1.5 L10,5.5");
     public static readonly Geometry ChevronLeft = Parse("M8,1 L3,6 L8,11");
     public static readonly Geometry ChevronUpDown = Parse("M2.5,4.5 L6,1.5 L9.5,4.5 M2.5,7.5 L6,10.5 L9.5,7.5");
     public static readonly Geometry ArrowUpRight = Parse("M3,9 L9,3 M4,3 L9,3 L9,8");

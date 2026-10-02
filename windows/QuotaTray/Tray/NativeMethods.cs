@@ -29,6 +29,8 @@ internal static class NativeMethods
     public const uint SWP_HIDEWINDOW = 0x0080;
     public static readonly IntPtr HWND_TOP = IntPtr.Zero;
     public const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
+    public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+    public const int MDT_EFFECTIVE_DPI = 0;
 
     public const byte AC_SRC_OVER = 0x00;
     public const byte AC_SRC_ALPHA = 0x01;
@@ -116,6 +118,13 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromRect(ref RECT rect, uint flags);
+
+    /// <summary>The monitor's scale in dots per inch (96 = 100%); returns an HRESULT, 0 on success.</summary>
+    [DllImport("shcore.dll")]
+    public static extern int GetDpiForMonitor(IntPtr monitor, int type, out uint dpiX, out uint dpiY);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

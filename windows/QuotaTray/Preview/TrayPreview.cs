@@ -18,7 +18,7 @@ internal static class TrayPreview
     private const double Width = 420;
     private const double TaskbarHeight = 48;
 
-    public static void Save(Dashboard dashboard, bool dark, string path)
+    public static void Save(Dashboard dashboard, bool dark, string path, bool updateAvailable = false)
     {
         var groups = TaskbarStripView.Groups(dashboard);
         if (groups.Count == 0)
@@ -56,7 +56,7 @@ internal static class TrayPreview
         taskbar.Children.Add(overflow);
 
         // The strip with the same padding TaskbarStrip gives it.
-        var strip = TaskbarStripView.Build(groups, text);
+        var strip = TaskbarStripView.Build(groups, text, updateAvailable);
         strip.Margin = new Thickness(8, 0, 8, 0);
         DockPanel.SetDock(strip, Dock.Right);
         taskbar.Children.Add(strip);

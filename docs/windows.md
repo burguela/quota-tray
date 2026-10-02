@@ -132,7 +132,7 @@ credentials on Windows, so Credential Manager is only a fallback.
 | What | Where |
 | --- | --- |
 | Settings and cached snapshots (provider on/off, meter style) | the `io.github.burguela.quotatray` preferences file Foundation's `UserDefaults` keeps under your user's AppData folder |
-| Logs | `%LOCALAPPDATA%\QuotaTray\Logs\` (`Engine.log` from the engine, `QuotaTray.log` from the tray app) |
+| Logs | `%LOCALAPPDATA%\QuotaTray\Logs\` (`Engine.log` from the engine, `QuotaTray.log` from the tray app; the tray log notes where the panel opened, so a panel that opens cut off or in the wrong place can be diagnosed from it) |
 | Spend-history parse cache, pricing cache | `%LOCALAPPDATA%\QuotaTray\` |
 | Launch at Login | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `QuotaTray` |
 | Show Total Spend, the selected spend period, Icon Style | `HKCU\Software\QuotaTray` |
@@ -187,6 +187,17 @@ with the installer, the portable zip, `install.ps1`, `uninstall.ps1`, and the no
 `windows/installer/release-notes.md`. The notes open with what changed since the previous Quota Tray
 release: the pull requests merged since then, as GitHub lists them, and a link to the full comparison.
 It refuses a version that is already released.
+
+### Updates
+
+Quota Tray asks this fork's GitHub releases for a newer version when it starts and every hour (one
+request to `api.github.com`). When a newer `quotatray-v<version>` release has the installer attached, a blue
+banner with an **Install Update** button appears at the top of the panel, the taskbar strip gets a small
+blue up-arrow badge (or the tray icon a blue dot, when the strip isn't showing), the icon's hover text says
+"Update available", and the tray menu gets an **Install Update** item. Clicking it downloads the installer
+(checked against GitHub's SHA-256), runs it silently, and the new version starts by itself. Your Launch at
+Login choice and settings are kept. A failed check is only logged; a failed download or install shows a
+**Try Again** button.
 
 While developing the tray app, set `QUOTATRAY_ENGINE` to a built `openusage-cli.exe` to use an engine
 from another folder. `QuotaTray.exe --render-preview <dashboard.json> <folder>` renders the panel (light and

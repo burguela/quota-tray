@@ -32,6 +32,7 @@ public sealed class TaskbarStrip : Forms.NativeWindow, IDisposable
     private readonly DispatcherTimer _timer;
     private IReadOnlyList<StripGroup> _groups = Array.Empty<StripGroup>();
     private bool _wanted;
+    private bool _updateAvailable;
     private bool _dirty = true;
     private bool _hover;
     private IntPtr _taskbar;
@@ -59,9 +60,10 @@ public sealed class TaskbarStrip : Forms.NativeWindow, IDisposable
     internal RECT? ScreenBounds =>
         IsShowing && Handle != IntPtr.Zero && GetWindowRect(Handle, out var bounds) ? bounds : null;
 
-    public void Show(IReadOnlyList<StripGroup> groups)
+    public void Show(IReadOnlyList<StripGroup> groups, bool updateAvailable)
     {
         _groups = groups;
+        _updateAvailable = updateAvailable;
         _wanted = true;
         _dirty = true;
         _timer.Start();
@@ -178,7 +180,7 @@ public sealed class TaskbarStrip : Forms.NativeWindow, IDisposable
                 CornerRadius = new CornerRadius(4),
                 Background = new SolidColorBrush(_hover ? hoverFill : HitTestFill),
                 Padding = new Thickness(HorizontalPadding, 0, HorizontalPadding, 0),
-                Child = TaskbarStripView.Build(_groups, TaskbarStripView.Foreground(TrayIconRenderer.TaskbarUsesLightTheme())),
+                Child = TaskbarStripView.Build(_groups, TaskbarStripView.Foreground(TrayIconRenderer.TaskbarUsesLightTheme()), _updateAvailable),
             },
         };
         root.Measure(new Size(double.PositiveInfinity, heightDip));

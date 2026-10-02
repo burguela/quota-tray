@@ -65,6 +65,8 @@ Root: HKCU; Subkey: "Software\QuotaTray"; ValueType: dword; ValueName: "LaunchAt
 
 [Run]
 Filename: "{app}\QuotaTray.exe"; Description: "Open Quota Tray"; Flags: nowait postinstall skipifsilent
+; The app's own "Install Update" runs this silently with /RELAUNCH=1, so it comes back up afterwards.
+Filename: "{app}\QuotaTray.exe"; Flags: nowait; Check: RelaunchRequested
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"
@@ -86,6 +88,11 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   StopRunningApp();
   Result := '';
+end;
+
+function RelaunchRequested(): Boolean;
+begin
+  Result := ExpandConstant('{param:relaunch|0}') = '1';
 end;
 
 function InitializeUninstall(): Boolean;

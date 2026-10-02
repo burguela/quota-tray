@@ -21,6 +21,9 @@ public sealed class TrayController : IPopupActions, IDisposable
     // While the panel is closed, check for stale providers every five minutes (the engine's
     // refresh interval); while it is open, every minute so countdowns stay current.
     private const int HiddenTicksPerRefresh = 5;
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(1);
+    // If the installer hasn't replaced and restarted this app by then, it failed; offer a retry.
+    private static readonly TimeSpan InstallGrace = TimeSpan.FromMinutes(2);
 
     private readonly App _app;
     private readonly EngineClient _engine;
@@ -30,6 +33,10 @@ public sealed class TrayController : IPopupActions, IDisposable
     private readonly PopupWindow _popup;
     private readonly DispatcherTimer _timer;
     private readonly Forms.ToolStripMenuItem _launchAtLoginItem;
+    private readonly Forms.ToolStripMenuItem _updateItem;
+    private readonly DispatcherTimer _updateTimer;
+    private UpdateRelease? _updateRelease;
+    private UpdateOffer? _offer;
     private Dashboard? _dashboard;
     private string? _engineError;
     private bool _refreshing;
@@ -51,6 +58,8 @@ public sealed class TrayController : IPopupActions, IDisposable
         var open = new Forms.ToolStripMenuItem("Open Quota Tray", null, (_, _) => _popup.ShowNearTray());
         open.Font = new System.Drawing.Font(open.Font, System.Drawing.FontStyle.Bold);
         menu.Items.Add(open);
+        _updateItem = new Forms.ToolStripMenuItem("Install Update", null, (_, _) => InstallUpdate()) { Visible = false };
+        menu.Items.Add(_updateItem);
         menu.Items.Add(new Forms.ToolStripMenuItem("Refresh Now", null, (_, _) => RefreshNow()));
         menu.Items.Add(new Forms.ToolStripMenuItem("Settings", null, (_, _) => _popup.ShowNearTray(settings: true)));
         menu.Items.Add(new Forms.ToolStripSeparator());
@@ -69,6 +78,8 @@ public sealed class TrayController : IPopupActions, IDisposable
 
         _timer = new DispatcherTimer { Interval = TickInterval };
         _timer.Tick += (_, _) => OnTick();
+        _updateTimer = new DispatcherTimer { Interval = UpdateCheckInterval };
+        _updateTimer.Tick += (_, _) => _ = CheckForUpdateAsync();
     }
 
     public void Start()
@@ -76,7 +87,9 @@ public sealed class TrayController : IPopupActions, IDisposable
         _icon.Show();
         UpdateTaskbar();
         _timer.Start();
+        _updateTimer.Start();
         _ = StartupLoadAsync();
+        _ = CheckForUpdateAsync();
     }
 
     /// <summary>Show what's cached immediately, then refresh whatever is stale.</summary>
@@ -207,7 +220,7 @@ public sealed class TrayController : IPopupActions, IDisposable
     {
         if (UiSettings.TrayStyle == TrayStyle.Text)
         {
-            _strip.Show(TaskbarStripView.Groups(_dashboard));
+            _strip.Show(TaskbarStripView.Groups(_dashboard), _offer != null);
         }
         else
         {
@@ -216,7 +229,91 @@ public sealed class TrayController : IPopupActions, IDisposable
         UpdateIcon();
     }
 
-    private void UpdateIcon() => _icon.Update(_dashboard, _engineError, drawMeters: !_strip.IsShowing);
+    private void UpdateIcon() => _icon.Update(_dashboard, _engineError, drawMeters: !_strip.IsShowing, _offer?.Version);
+
+    // MARK: - Updates
+
+    /// <summary>
+    /// Asks GitHub for a newer release every few hours. A failed check (offline, rate-limited) is logged
+    /// and tried again next time; it is not worth interrupting the user for.
+    /// </summary>
+    private async Task CheckForUpdateAsync()
+    {
+        if (_offer?.Phase == UpdatePhase.Installing)
+        {
+            return;
+        }
+        try
+        {
+            var release = await Task.Run(() => UpdateChecker.CheckAsync());
+            if (_disposed)
+            {
+                return;
+            }
+            _updateRelease = release;
+            if (release == null)
+            {
+                if (_offer != null)
+                {
+                    SetOffer(null);
+                }
+            }
+            else if (_offer?.Version != release.Version.ToString())
+            {
+                AppLog.Info($"update available: {release.Version}");
+                SetOffer(new UpdateOffer(release.Version.ToString(), UpdatePhase.Available));
+            }
+        }
+        catch (Exception error)
+        {
+            AppLog.Warn($"update check failed: {error.Message}");
+        }
+    }
+
+    public void InstallUpdate()
+    {
+        if (_updateRelease is not { } release || _offer?.Phase == UpdatePhase.Installing)
+        {
+            return;
+        }
+        _ = InstallUpdateAsync(release);
+    }
+
+    private async Task InstallUpdateAsync(UpdateRelease release)
+    {
+        var version = release.Version.ToString();
+        SetOffer(new UpdateOffer(version, UpdatePhase.Installing));
+        try
+        {
+            var setup = await Task.Run(() => UpdateChecker.DownloadAsync(release));
+            AppLog.Info($"installing update {version} from {setup}");
+            UpdateChecker.StartInstaller(setup);
+            // The installer ends this app and starts the new one; reaching the end of the wait means it didn't.
+            await Task.Delay(InstallGrace);
+            if (!_disposed && _offer?.Phase == UpdatePhase.Installing)
+            {
+                AppLog.Error($"update {version}: the installer didn't replace the app within {InstallGrace.TotalMinutes} minutes");
+                SetOffer(new UpdateOffer(version, UpdatePhase.Failed, "The installer didn't finish. Try again."));
+            }
+        }
+        catch (Exception error)
+        {
+            AppLog.Error($"update {version} failed: {error}");
+            SetOffer(new UpdateOffer(version, UpdatePhase.Failed, "Quota Tray couldn't download the update. Try again."));
+        }
+    }
+
+    private void SetOffer(UpdateOffer? offer)
+    {
+        _offer = offer;
+        _updateItem.Visible = offer != null && offer.Phase != UpdatePhase.Installing;
+        if (offer != null)
+        {
+            _updateItem.Text = $"Install Update ({offer.Version})";
+        }
+        _popup.SetUpdate(offer);
+        UpdateTaskbar();
+    }
 
     // MARK: - IPopupActions
 
@@ -324,6 +421,7 @@ public sealed class TrayController : IPopupActions, IDisposable
         }
         _disposed = true;
         _timer.Stop();
+        _updateTimer.Stop();
         _strip.Dispose();
         _icon.Dispose();
         _popup.Close();

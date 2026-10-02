@@ -26,6 +26,7 @@ public interface IPopupActions
     void SetTrayStyle(TrayStyle style);
     void SetLaunchAtLogin(bool enabled);
     void OpenLogFolder();
+    void InstallUpdate();
     void Quit();
 }
 
@@ -48,6 +49,7 @@ public partial class PopupWindow : Window
     private readonly DispatcherTimer _clock;
     private Dashboard? _dashboard;
     private string? _engineError;
+    private UpdateOffer? _update;
     private bool _refreshing;
     private bool _showingSettings;
     private bool _closing;
@@ -84,7 +86,6 @@ public partial class PopupWindow : Window
             LastAutoHide = DateTime.UtcNow;
             Hide();
         };
-        SizeChanged += (_, _) => PositionNearTray();
         PreviewKeyDown += OnPreviewKeyDown;
         // The footer's "Next update in …" counts down every second while the panel is open.
         _clock = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -120,7 +121,9 @@ public partial class PopupWindow : Window
         }
         Render();
         Show();
-        PositionNearTray();
+        PositionNearTray("open");
+        // Once Windows has finished showing the window, check it landed where it was asked to.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => PositionNearTray("settled"));
         Activate();
         Focus();
         if (!wasVisible)
@@ -155,6 +158,13 @@ public partial class PopupWindow : Window
         }
         _engineError = engineError;
         _refreshing = refreshing;
+        Render();
+    }
+
+    /// <summary>Shows (or clears) the banner offering a newer Quota Tray.</summary>
+    public void SetUpdate(UpdateOffer? offer)
+    {
+        _update = offer;
         Render();
     }
 
@@ -206,20 +216,47 @@ public partial class PopupWindow : Window
         Render();
     }
 
-    private void PositionNearTray()
+    /// <summary>
+    /// Sizes the panel from its measured content and puts it above the taskbar in one step, so the height
+    /// never depends on when the window gets laid out. Called when it opens, after each re-render while
+    /// it's open, and when the screen or its scale changes. <paramref name="retry"/> runs it once more
+    /// if Windows left the panel somewhere else than asked (a scale change on the way, say).
+    /// </summary>
+    private void PositionNearTray(string reason, bool retry = true)
     {
-        if (!IsVisible || !ShowActivated)
+        if (!IsVisible || _closing)
         {
             return;
         }
         try
         {
-            PanelPlacement.Place(new WindowInteropHelper(this).Handle, StripBounds?.Invoke(), Frame.Margin.Right);
+            Frame.Measure(new Size(Width, double.PositiveInfinity));
+            var result = PanelPlacement.Place(new WindowInteropHelper(this).Handle, StripBounds?.Invoke(),
+                Width, Frame.DesiredSize.Height, Frame.Margin.Right);
+            if (!result.Landed)
+            {
+                AppLog.Warn($"panel placement missed ({reason}): {result}");
+                if (retry)
+                {
+                    Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => PositionNearTray($"{reason}, retry", retry: false));
+                }
+            }
+            else if (reason is "open" or "dpi-changed" or "display-changed")
+            {
+                AppLog.Info($"panel placed ({reason}): {result}");
+            }
         }
         catch (ExternalException error)
         {
             AppLog.Error($"panel placement failed: {error}");
         }
+    }
+
+    /// <summary>Moving to a monitor with another scale resizes the window; place it again at the new scale.</summary>
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => PositionNearTray("dpi-changed"));
     }
 
     /// <summary>A resolution or scale change while the panel is open: fit and place it again.</summary>
@@ -229,7 +266,7 @@ public partial class PopupWindow : Window
             if (IsVisible && !_closing)
             {
                 Render();
-                PositionNearTray();
+                PositionNearTray("display-changed");
             }
         });
 
@@ -290,6 +327,8 @@ public partial class PopupWindow : Window
         {
             RestoreFocus(focusKey);
         }
+        // New content means a new height: fit the open panel to it right away.
+        PositionNearTray("update");
     }
 
     /// <summary>The automation id or name of the control that has keyboard focus, if it's in the panel.</summary>

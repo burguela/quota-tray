@@ -30,13 +30,20 @@ public sealed class TrayIcon : IDisposable
 
     public void Show() => _notifyIcon.Visible = true;
 
-    public void Update(Dashboard? dashboard, string? error, bool drawMeters)
+    /// <summary>
+    /// <paramref name="updateVersion"/> is a newer Quota Tray's version, if one is out: the hover text says
+    /// so, and when the icon itself is what shows (no taskbar strip) it carries a small blue dot.
+    /// </summary>
+    public void Update(Dashboard? dashboard, string? error, bool drawMeters, string? updateVersion)
     {
         var meters = drawMeters ? TrayIconRenderer.IconMeters(dashboard) : Array.Empty<RowInfo>();
+        var dot = drawMeters && updateVersion != null;
         var previous = _rendered;
-        _rendered = meters.Count == 0 ? null : TrayIconRenderer.DrawMeters(meters, TrayIconRenderer.TaskbarUsesLightTheme());
+        _rendered = meters.Count > 0
+            ? TrayIconRenderer.DrawMeters(meters, TrayIconRenderer.TaskbarUsesLightTheme(), dot)
+            : dot ? TrayIconRenderer.AppIconWithUpdateDot(_appIcon) : null;
         _notifyIcon.Icon = _rendered ?? _appIcon;
-        _notifyIcon.Text = Tooltip(dashboard, error);
+        _notifyIcon.Text = Tooltip(dashboard, error, updateVersion);
         previous?.Dispose();
     }
 
@@ -44,9 +51,13 @@ public sealed class TrayIcon : IDisposable
         _notifyIcon.ShowBalloonTip(5000, "Quota Tray", message, Forms.ToolTipIcon.Warning);
 
     /// <summary>"Quota Tray" plus the pinned readings, e.g. "Claude: Session 58% · Weekly 40%".</summary>
-    internal static string Tooltip(Dashboard? dashboard, string? error)
+    internal static string Tooltip(Dashboard? dashboard, string? error, string? updateVersion = null)
     {
         var text = new StringBuilder("Quota Tray");
+        if (updateVersion != null)
+        {
+            text.Append("\nUpdate available: ").Append(updateVersion);
+        }
         if (error != null)
         {
             text.Append("\nCouldn't Refresh");

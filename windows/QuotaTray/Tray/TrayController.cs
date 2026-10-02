@@ -21,7 +21,7 @@ public sealed class TrayController : IPopupActions, IDisposable
     // While the panel is closed, check for stale providers every five minutes (the engine's
     // refresh interval); while it is open, every minute so countdowns stay current.
     private const int HiddenTicksPerRefresh = 5;
-    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(6);
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(1);
     // If the installer hasn't replaced and restarted this app by then, it failed; offer a retry.
     private static readonly TimeSpan InstallGrace = TimeSpan.FromMinutes(2);
 

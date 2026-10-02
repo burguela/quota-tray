@@ -190,7 +190,7 @@ It refuses a version that is already released.
 
 ### Updates
 
-Quota Tray asks this fork's GitHub releases for a newer version when it starts and every six hours (one
+Quota Tray asks this fork's GitHub releases for a newer version when it starts and every hour (one
 request to `api.github.com`). When a newer `quotatray-v<version>` release has the installer attached, a blue
 banner with an **Install Update** button appears at the top of the panel, the taskbar strip gets a small
 blue up-arrow badge (or the tray icon a blue dot, when the strip isn't showing), the icon's hover text says

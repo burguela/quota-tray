@@ -24,7 +24,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- Quota Tray's own version: the footer, the installer, and the release tag (quotatray-vX.Y.Z) use it.
          Only the owner decides a new number. -->
-    <Version>0.1.8</Version>
+    <Version>0.1.9</Version>
     <Product>Quota Tray</Product>
     <Company>Quota Tray</Company>
     <Description>Quota Tray, an unofficial Windows fork of OpenUsage</Description>

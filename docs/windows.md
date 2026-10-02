@@ -188,6 +188,17 @@ with the installer, the portable zip, `install.ps1`, `uninstall.ps1`, and the no
 release: the pull requests merged since then, as GitHub lists them, and a link to the full comparison.
 It refuses a version that is already released.
 
+### Updates
+
+Quota Tray asks this fork's GitHub releases for a newer version when it starts and every six hours (one
+request to `api.github.com`). When a newer `quotatray-v<version>` release has the installer attached, a blue
+banner with an **Install Update** button appears at the top of the panel, the taskbar strip gets a small
+blue up-arrow badge (or the tray icon a blue dot, when the strip isn't showing), the icon's hover text says
+"Update available", and the tray menu gets an **Install Update** item. Clicking it downloads the installer
+(checked against GitHub's SHA-256), runs it silently, and the new version starts by itself. Your Launch at
+Login choice and settings are kept. A failed check is only logged; a failed download or install shows a
+**Try Again** button.
+
 While developing the tray app, set `QUOTATRAY_ENGINE` to a built `openusage-cli.exe` to use an engine
 from another folder. `QuotaTray.exe --render-preview <dashboard.json> <folder>` renders the panel (light and
 dark: dashboard, Settings, and the taskbar strip; light only: the engine-error notice and the no-providers prompt) to PNGs from a saved dashboard document; CI does this with

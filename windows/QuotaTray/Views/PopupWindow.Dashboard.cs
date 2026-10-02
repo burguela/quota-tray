@@ -25,6 +25,10 @@ public partial class PopupWindow
 
     private void BuildDashboard(StackPanel body, Theme theme)
     {
+        if (_update != null)
+        {
+            body.Children.Add(UpdateBanner(_update, theme));
+        }
         if (_engineError != null)
         {
             body.Children.Add(EngineNotice(_engineError, theme));
@@ -79,6 +83,38 @@ public partial class PopupWindow
         retry.HorizontalAlignment = HorizontalAlignment.Left;
         retry.Margin = new Thickness(0, 8, 0, 0);
         content.Children.Add(retry);
+        row.Children.Add(content);
+        var card = Card(row, theme, new Thickness(RowInset, 10, RowInset, 10));
+        card.Margin = new Thickness(0, 0, 0, SectionSpacing);
+        return card;
+    }
+
+    /// <summary>
+    /// A newer Quota Tray is out: a blue-flagged card above everything else with an Install Update
+    /// button (it downloads and installs, then the app starts again), like the engine notice's layout.
+    /// </summary>
+    private UIElement UpdateBanner(UpdateOffer offer, Theme theme)
+    {
+        var row = new DockPanel();
+        var icon = Glyph(Glyphs.ArrowUp, theme.Blue, 13, stroke: 1.8, margin: new Thickness(0, 1, 8, 0));
+        icon.VerticalAlignment = VerticalAlignment.Top;
+        row.Children.Add(icon);
+        var content = new StackPanel();
+        var message = offer.Phase switch
+        {
+            UpdatePhase.Installing => $"Installing Quota Tray {offer.Version}…",
+            UpdatePhase.Failed => offer.Error ?? "Quota Tray couldn't install the update.",
+            _ => $"Quota Tray {offer.Version} is available.",
+        };
+        content.Children.Add(Text(message, theme.TextPrimary, SupportingSize, wrap: true));
+        if (offer.Phase != UpdatePhase.Installing)
+        {
+            var label = offer.Phase == UpdatePhase.Failed ? "Try Again" : "Install Update";
+            var install = SmallButton(Text(label, theme.TextPrimary, SupportingSize, FontWeights.Medium), theme, _actions.InstallUpdate, label);
+            install.HorizontalAlignment = HorizontalAlignment.Left;
+            install.Margin = new Thickness(0, 8, 0, 0);
+            content.Children.Add(install);
+        }
         row.Children.Add(content);
         var card = Card(row, theme, new Thickness(RowInset, 10, RowInset, 10));
         card.Margin = new Thickness(0, 0, 0, SectionSpacing);

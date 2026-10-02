@@ -34,10 +34,35 @@ public static class TrayIconRenderer
                 .Take(2)
                 .ToList();
 
-    public static Icon DrawMeters(IReadOnlyList<RowInfo> meters, bool lightTaskbar)
+    public static Icon DrawMeters(IReadOnlyList<RowInfo> meters, bool lightTaskbar, bool updateDot = false)
     {
         using var bitmap = DrawMetersBitmap(meters, System.Windows.Forms.SystemInformation.SmallIconSize, lightTaskbar);
+        if (updateDot)
+        {
+            AddUpdateDot(bitmap);
+        }
         return ToIcon(bitmap);
+    }
+
+    /// <summary>The app icon with the update dot, for when there are no meters to draw.</summary>
+    public static Icon AppIconWithUpdateDot(Icon appIcon)
+    {
+        using var bitmap = appIcon.ToBitmap();
+        AddUpdateDot(bitmap);
+        return ToIcon(bitmap);
+    }
+
+    /// <summary>A blue dot with a thin white ring in the icon's top-right corner: a new version is ready.</summary>
+    private static void AddUpdateDot(Bitmap bitmap)
+    {
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var diameter = Math.Max(6f, bitmap.Width * 0.45f);
+        var dot = new RectangleF(bitmap.Width - diameter - 0.5f, 0.5f, diameter, diameter);
+        using var ring = new SolidBrush(Color.White);
+        graphics.FillEllipse(ring, RectangleF.Inflate(dot, 1f, 1f));
+        using var fill = new SolidBrush(Color.FromArgb(0x2F, 0x80, 0xED));
+        graphics.FillEllipse(fill, dot);
     }
 
     /// <summary>The meters icon as a bitmap of <paramref name="size"/> (also used by the previews).</summary>

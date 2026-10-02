@@ -26,6 +26,7 @@ public interface IPopupActions
     void SetTrayStyle(TrayStyle style);
     void SetLaunchAtLogin(bool enabled);
     void OpenLogFolder();
+    void InstallUpdate();
     void Quit();
 }
 
@@ -48,6 +49,7 @@ public partial class PopupWindow : Window
     private readonly DispatcherTimer _clock;
     private Dashboard? _dashboard;
     private string? _engineError;
+    private UpdateOffer? _update;
     private bool _refreshing;
     private bool _showingSettings;
     private bool _closing;
@@ -156,6 +158,13 @@ public partial class PopupWindow : Window
         }
         _engineError = engineError;
         _refreshing = refreshing;
+        Render();
+    }
+
+    /// <summary>Shows (or clears) the banner offering a newer Quota Tray.</summary>
+    public void SetUpdate(UpdateOffer? offer)
+    {
+        _update = offer;
         Render();
     }
 

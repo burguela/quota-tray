@@ -36,6 +36,7 @@ public static class PreviewRenderer
                 window.Close();
             }
             TrayPreview.Save(dashboard, dark, Path.Combine(outputFolder, $"tray-{(dark ? "dark" : "light")}.png"));
+            TrayPreview.Save(dashboard, dark, Path.Combine(outputFolder, $"tray-update-{(dark ? "dark" : "light")}.png"), updateAvailable: true);
         }
 
         // The panel's two edge states, light only: the engine failed (the notice with Try Again), and
@@ -43,6 +44,11 @@ public static class PreviewRenderer
         Theme.Force(false);
         SaveState(dashboard, "The Quota Tray engine didn't answer in time. Check the log folder for details.",
             Path.Combine(outputFolder, "notice-light.png"));
+        var updating = new PopupWindow(new NoActions());
+        updating.SetUpdate(new UpdateOffer("0.1.9", UpdatePhase.Available));
+        Save(updating.RenderForPreview(dashboard, settings: false, expandFirstProvider: false), updating,
+            Path.Combine(outputFolder, "update-light.png"));
+        updating.Close();
         var empty = Load(dashboardPath);
         empty.TotalSpend = null;
         empty.Providers.ForEach(p => p.Enabled = false);
@@ -106,6 +112,7 @@ public static class PreviewRenderer
         public void SetTrayStyle(TrayStyle style) { }
         public void SetLaunchAtLogin(bool enabled) { }
         public void OpenLogFolder() { }
+        public void InstallUpdate() { }
         public void Quit() { }
     }
 }

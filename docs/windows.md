@@ -132,7 +132,7 @@ credentials on Windows, so Credential Manager is only a fallback.
 | What | Where |
 | --- | --- |
 | Settings and cached snapshots (provider on/off, meter style) | the `io.github.burguela.quotatray` preferences file Foundation's `UserDefaults` keeps under your user's AppData folder |
-| Logs | `%LOCALAPPDATA%\QuotaTray\Logs\` (`Engine.log` from the engine, `QuotaTray.log` from the tray app) |
+| Logs | `%LOCALAPPDATA%\QuotaTray\Logs\` (`Engine.log` from the engine, `QuotaTray.log` from the tray app; the tray log notes where the panel opened, so a panel that opens cut off or in the wrong place can be diagnosed from it) |
 | Spend-history parse cache, pricing cache | `%LOCALAPPDATA%\QuotaTray\` |
 | Launch at Login | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `QuotaTray` |
 | Show Total Spend, the selected spend period, Icon Style | `HKCU\Software\QuotaTray` |

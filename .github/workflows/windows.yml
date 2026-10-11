@@ -72,6 +72,9 @@ jobs:
           -p:EnableCompressionInSingleFile=true
           -o dist/QuotaTray
 
+      - name: Test panel sizing
+        run: dotnet run --project windows/QuotaTray.Tests/QuotaTray.Tests.csproj -c Release
+
       - name: Render panel screenshots
         shell: pwsh
         run: |

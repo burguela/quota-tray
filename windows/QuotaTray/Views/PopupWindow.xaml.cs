@@ -45,6 +45,8 @@ public partial class PopupWindow : Window
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromMinutes(5);
 
     private readonly IPopupActions _actions;
+    // Native resizes (including DPI transitions) change WPF's Width; keep the intended XAML width.
+    private readonly double _panelWidth;
     private readonly HashSet<string> _expandedProviders = new();
     private readonly DispatcherTimer _clock;
     private Dashboard? _dashboard;
@@ -70,6 +72,7 @@ public partial class PopupWindow : Window
     {
         _actions = actions;
         InitializeComponent();
+        _panelWidth = Width;
         Closing += (_, _) =>
         {
             _closing = true;
@@ -230,9 +233,9 @@ public partial class PopupWindow : Window
         }
         try
         {
-            Frame.Measure(new Size(Width, double.PositiveInfinity));
+            Frame.Measure(new Size(_panelWidth, double.PositiveInfinity));
             var result = PanelPlacement.Place(new WindowInteropHelper(this).Handle, StripBounds?.Invoke(),
-                Width, Frame.DesiredSize.Height, Frame.Margin.Right);
+                _panelWidth, Frame.DesiredSize.Height, Frame.Margin.Right);
             if (!result.Landed)
             {
                 AppLog.Warn($"panel placement missed ({reason}): {result}");

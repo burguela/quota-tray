@@ -15,7 +15,8 @@ The panel follows the Mac popover's layout and colors, in Windows' light or dark
 
 - **Click the taskbar strip or the tray icon** to open the panel. It always opens in the same spot, right
   above the strip (above the notification area when the strip is off), even after you change the screen
-  resolution or scale. Click anywhere else, or press Esc, to close it. The panel keeps your scroll
+  resolution or scale, and returns to its normal width after a scale change. Click anywhere else, or
+  press Esc, to close it. The panel keeps your scroll
   position when it updates or when you open a card's caret.
 - **Cost** at the top is the Total Spend ring: what Claude, Codex, Cursor, and other spend-tracking
   providers cost Today, Yesterday, or over the last 30 days. Turn it off in Settings.
@@ -173,6 +174,8 @@ swift build -c release --product openusage-cli -Xcc -D_ALLOW_COMPILER_AND_STL_VE
 dotnet publish windows/QuotaTray/QuotaTray.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o dist/QuotaTray
 windows/scripts/package.ps1 -BuildDir .build/release -OutDir dist/QuotaTray
 dist/QuotaTray/QuotaTray.exe
+# Windows panel regression tests (native resize, refresh, and reopen).
+dotnet run --project windows/QuotaTray.Tests/QuotaTray.Tests.csproj -c Release
 # Optional: the installer (Inno Setup 6). The version is the one the engine reports.
 iscc /DAppVersion=0.7.0 /DAppDir=$PWD\dist\QuotaTray /DOutputDir=$PWD\dist\installer windows\installer\QuotaTray.iss
 ```
